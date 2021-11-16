@@ -21,6 +21,7 @@ const MONGODB_URI = config.MONGODB_URI;
 const JWT_SECRET = "NEED_HERE_A_SECRET_KEY";
 
 console.log("connecting to", MONGODB_URI);
+mongoose.set('debug', true);
 
 mongoose
   .connect(MONGODB_URI)

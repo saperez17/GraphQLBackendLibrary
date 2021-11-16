@@ -1,4 +1,9 @@
-const { gql } = require("apollo-server-express");
+const {
+  ApolloServer,
+  UserInputError,
+  AuthenticationError,
+  gql,
+} = require("apollo-server-express");
 const Book = require("../../models/book");
 const Author = require("../../models/author");
 const User = require("../../models/user");
@@ -68,16 +73,20 @@ const schema = {
 
         return Book.find({}).populate("author");
       },
-      allAuthors: async (root, args) => Author.find({}),
+      allAuthors: async (root, args) => {
+        console.log("Author.find")
+        return Author.find({})
+      },
       me: (root, args, context) => context.currentUser,
     },
 
-    Author: {
-      bookCount: async (root) => {
-        const writtenBooks = await Book.find({ author: { $in: root.id } });
-        return writtenBooks.length;
-      },
-    },
+    // Author: {
+    //   bookCount: async (root) => {
+    //     const writtenBooks = await Book.find({ author: { $in: root.id } });
+    //     console.log("Book.find")
+    //     return writtenBooks.length;
+    //   },
+    // },
 
     Mutation: {
       addBook: async (root, args, { currentUser }) => {
@@ -87,18 +96,22 @@ const schema = {
 
         const authorSearch = await Author.findOne({ name: args.author });
         if (!authorSearch) {
-          const newAuthor = new Author({ name: args.author });
+          const newAuthor = new Author({
+            name: args.author,
+            bookCount: 1
+          });
           await newAuthor.save();
           const book = new Book({
             title: args.title,
             published: args.published,
             genres: args.genres,
             author: newAuthor,
+            
           });
           try {
             await book.save();
-          } catch (e) {
-            throw new UserInputError(error.message, {
+          } catch (error) {
+            return new UserInputError(error.message, {
               invalidArgs: args,
             });
           }
@@ -111,17 +124,20 @@ const schema = {
           genres: args.genres,
           author: authorSearch,
         });
+        authorSearch.bookCount += 1;
 
-        console.log("before publish");
-        pubsub.publish("BOOK_ADDED", {
-          bookAdded: book,
-        });
-
-        return book.save().catch((error) => {
-          throw new UserInputError(error.message, {
+        try {
+          await book.save();
+          pubsub.publish("BOOK_ADDED", {
+            bookAdded: book,
+          });
+        } catch (error) {
+          return new UserInputError(error.message, {
             invalidArgs: args,
           });
-        });
+        }
+
+        return book;
       },
 
       editAuthor: async (root, args, context) => {
